@@ -119,3 +119,7 @@ nnoremap <silent> <leader>h :History<CR>
 
 " fzf popup spans the bottom 40% of the window
 let g:fzf_layout = { 'down': '~40%' }
+
+" Transparent background to defer to terminal
+highlight Normal ctermbg=NONE guibg=NONE
+highlight NonText ctermbg=NONE guibg=NONE
