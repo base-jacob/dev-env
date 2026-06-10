@@ -102,7 +102,68 @@ nnoremap <silent> <leader>e :LspDiagShow<CR>
 
 " Symbol search
 nnoremap <silent> <leader>s :LspDocumentSymbol<CR>
-nnoremap <silent> <leader>S :LspSymbolSearch<Space>
+nnoremap <leader>S :call <SID>LspWorkspaceSymbolFzf(input('Symbol> '))<CR>
+
+" Workspace symbol search via LSP, results piped into fzf for fuzzy filtering.
+" Uses the synchronous workspace/symbol RPC and renders matches in an fzf popup.
+function! s:LspWorkspaceSymbolFzf(query) abort
+  let l:server = lsp#lsp#Server()
+  if empty(l:server) || !get(l:server, 'isWorkspaceSymbolProvider', v:false)
+    echohl WarningMsg | echo 'LSP: workspace symbol search unavailable' | echohl None
+    return
+  endif
+
+  let l:reply = l:server.rpc('workspace/symbol', {'query': a:query}, {'handleError': v:false})
+  if empty(l:reply) || !has_key(l:reply, 'result') || empty(l:reply.result)
+    echohl WarningMsg | echo 'LSP: no symbols match "' . a:query . '"' | echohl None
+    return
+  endif
+
+  let l:lines = []
+  for l:sym in l:reply.result
+    if !has_key(l:sym, 'location') || !has_key(l:sym.location, 'range')
+      continue
+    endif
+    let l:path = substitute(l:sym.location.uri, '^file://', '', '')
+    let l:lnum = l:sym.location.range.start.line + 1
+    let l:col  = l:sym.location.range.start.character + 1
+    let l:name = get(l:sym, 'name', '')
+    let l:cont = get(l:sym, 'containerName', '')
+    let l:disp = empty(l:cont) ? l:name : l:cont . '::' . l:name
+    let l:rel  = fnamemodify(l:path, ':.')
+    call add(l:lines, printf("%s:%d:%d\t%s\t%s", l:path, l:lnum, l:col, l:disp, l:rel))
+  endfor
+
+  if empty(l:lines)
+    echohl WarningMsg | echo 'LSP: no usable symbol locations' | echohl None
+    return
+  endif
+
+  call fzf#run(fzf#wrap('lsp-symbols', {
+        \ 'source':  l:lines,
+        \ 'sink':    function('s:LspWorkspaceSymbolSink'),
+        \ 'options': ['--prompt', 'Symbol> ',
+        \             '--delimiter', "\t",
+        \             '--with-nth', '2,3',
+        \             '--nth', '2,3'],
+        \ }))
+endfunction
+
+function! s:LspWorkspaceSymbolSink(line) abort
+  let l:parts = split(a:line, "\t")
+  if empty(l:parts)
+    return
+  endif
+  let l:loc = split(l:parts[0], ':')
+  if len(l:loc) < 3
+    return
+  endif
+  let l:col  = str2nr(l:loc[-1])
+  let l:lnum = str2nr(l:loc[-2])
+  let l:path = join(l:loc[0:-3], ':')
+  execute 'edit' fnameescape(l:path)
+  call cursor(l:lnum, l:col)
+endfunction
 
 " Refactor
 nnoremap <silent> <leader>rn :LspRename<CR>
