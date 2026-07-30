@@ -1,8 +1,8 @@
 /*
- * Interview exercise: a custom heap allocator.
+ * Interview exercise: a custom heap allocator. (SOLUTION)
  *
- * Build:   cc -Wall -Wextra -O0 -g alloc_exercise.c -o alloc_exercise
- * Run:     ./alloc_exercise
+ * Build:   cc -Wall -Wextra -O0 -g alloc_exercise_solution.c -o alloc_exercise_solution
+ * Run:     ./alloc_exercise_solution
  */
 
 #include <stddef.h>
@@ -14,15 +14,17 @@
 /* ------------------------------------------------------------------ */
 
 #define HEAP_BYTES 1024
+#define ALIGN_TO   16
 
-static uint8_t pool[HEAP_BYTES] __attribute__((aligned(16)));
+static uint8_t pool[HEAP_BYTES] __attribute__((aligned(ALIGN_TO)));
 
 typedef struct blk {
     size_t   nbytes;   /* payload only, not including this struct */
     uint32_t in_use;
 } blk_t;
 
-#define BLK_HDR (sizeof(blk_t))
+#define BLK_HDR   (sizeof(blk_t))
+#define MIN_SPLIT (BLK_HDR + ALIGN_TO)
 
 static int pool_ready = 0;
 
@@ -33,14 +35,31 @@ static void pool_setup(void) {
     pool_ready = 1;
 }
 
+static size_t align_up(size_t len) {
+    return (len + ALIGN_TO - 1) & ~(size_t)(ALIGN_TO - 1);
+}
+
 void *mem_alloc(size_t len) {
     if (!pool_ready) pool_setup();
     if (len == 0) return NULL;
+
+    /* Round the request up so the block that follows also lands on an
+     * aligned boundary. BLK_HDR is a multiple of ALIGN_TO, and the pool
+     * base is aligned, so this is sufficient. */
+    len = align_up(len);
 
     uint8_t *cursor = pool;
     while (cursor < pool + HEAP_BYTES) {
         blk_t *block = (blk_t *)cursor;
         if (!block->in_use && block->nbytes >= len) {
+            /* Split off the remainder only if it can hold a header
+             * plus at least one aligned allocation. */
+            if (block->nbytes >= len + MIN_SPLIT) {
+                blk_t *new_block = (blk_t *)(cursor + BLK_HDR + len);
+                new_block->nbytes = block->nbytes - len - BLK_HDR;
+                new_block->in_use = 0;
+                block->nbytes = len;
+            }
             block->in_use = 1;
             return cursor + BLK_HDR;
         }
@@ -53,6 +72,32 @@ void mem_free(void *ptr) {
     if (!ptr) return;
     blk_t *block = (blk_t *)((uint8_t *)ptr - BLK_HDR);
     block->in_use = 0;
+
+    /* Merge with the next block if it exists and is free. */
+    uint8_t *next = (uint8_t *)block + BLK_HDR + block->nbytes;
+    if (next < pool + HEAP_BYTES) {
+        blk_t *next_block = (blk_t *)next;
+        if (!next_block->in_use) {
+            block->nbytes += BLK_HDR + next_block->nbytes;
+        }
+    }
+
+    /* Merge with the previous block if it exists and is free. Implicit
+     * layout means we walk from the start to find it. */
+    if ((uint8_t *)block != pool) {
+        uint8_t *cursor = pool;
+        while (cursor < (uint8_t *)block) {
+            blk_t *prev_block = (blk_t *)cursor;
+            uint8_t *step = cursor + BLK_HDR + prev_block->nbytes;
+            if (step == (uint8_t *)block) {
+                if (!prev_block->in_use) {
+                    prev_block->nbytes += BLK_HDR + block->nbytes;
+                }
+                break;
+            }
+            cursor = step;
+        }
+    }
 }
 
 void pool_reset(void) {
