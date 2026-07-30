@@ -3,9 +3,6 @@
  *
  * Build:   cc -Wall -Wextra -O0 -g alloc_exercise.c -o alloc_exercise
  * Run:     ./alloc_exercise
- *
- * The pool is used as a DMA staging buffer, so every pointer returned by
- * mem_alloc must be aligned to 16 bytes.
  */
 
 #include <stddef.h>
@@ -36,26 +33,26 @@ static void pool_setup(void) {
     pool_ready = 1;
 }
 
-void *mem_alloc(size_t n) {
+void *mem_alloc(size_t len) {
     if (!pool_ready) pool_setup();
-    if (n == 0) return NULL;
+    if (len == 0) return NULL;
 
-    uint8_t *cur = pool;
-    while (cur < pool + HEAP_BYTES) {
-        blk_t *b = (blk_t *)cur;
-        if (!b->in_use && b->nbytes >= n) {
-            b->in_use = 1;
-            return cur + BLK_HDR;
+    uint8_t *cursor = pool;
+    while (cursor < pool + HEAP_BYTES) {
+        blk_t *block = (blk_t *)cursor;
+        if (!block->in_use && block->nbytes >= len) {
+            block->in_use = 1;
+            return cursor + BLK_HDR;
         }
-        cur += BLK_HDR + b->nbytes;
+        cursor += BLK_HDR + block->nbytes;
     }
     return NULL;
 }
 
-void mem_free(void *p) {
-    if (!p) return;
-    blk_t *b = (blk_t *)((uint8_t *)p - BLK_HDR);
-    b->in_use = 0;
+void mem_free(void *ptr) {
+    if (!ptr) return;
+    blk_t *block = (blk_t *)((uint8_t *)ptr - BLK_HDR);
+    block->in_use = 0;
 }
 
 void pool_reset(void) {
@@ -63,10 +60,10 @@ void pool_reset(void) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Workloads                                                          */
+/* Tests                                                              */
 /* ------------------------------------------------------------------ */
 
-static int workload_1(void) {
+static int test_1(void) {
     pool_reset();
 
     void *big = mem_alloc(900);
@@ -77,14 +74,14 @@ static int workload_1(void) {
 
     (void)small;
     if (more == NULL) {
-        printf("workload 1: FAIL\n");
+        printf("test 1: FAIL\n");
         return 1;
     }
-    printf("workload 1: ok\n");
+    printf("test 1: ok\n");
     return 0;
 }
 
-static int workload_2(void) {
+static int test_2(void) {
     pool_reset();
 
     void *a = mem_alloc(71);
@@ -99,10 +96,10 @@ static int workload_2(void) {
 
     (void)a; (void)d;
     if (e == NULL) {
-        printf("workload 2: FAIL\n");
+        printf("test 2: FAIL\n");
         return 1;
     }
-    printf("workload 2: ok\n");
+    printf("test 2: ok\n");
     return 0;
 }
 
@@ -111,14 +108,14 @@ static int workload_2(void) {
  * free order. At the end the pool should be recoverable enough to satisfy
  * a large single allocation.
  */
-static int workload_3(void) {
+static int test_3(void) {
     pool_reset();
 
     for (int i = 0; i < 40; i++) {
         void *x = mem_alloc(40);
         void *y = mem_alloc(56);
         void *z = mem_alloc(24);
-        if (!x || !y || !z) { printf("workload 3: FAIL\n"); return 1; }
+        if (!x || !y || !z) { printf("test 3: FAIL\n"); return 1; }
 
         switch (i % 3) {
             case 0: mem_free(x); mem_free(y); mem_free(z); break;
@@ -129,16 +126,16 @@ static int workload_3(void) {
 
     void *huge = mem_alloc(800);
     if (huge == NULL) {
-        printf("workload 3: FAIL\n");
+        printf("test 3: FAIL\n");
         return 1;
     }
-    printf("workload 3: ok\n");
+    printf("test 3: ok\n");
     return 0;
 }
 
 int main(void) {
-    workload_1();
-    workload_2();
-    workload_3();
+    test_1();
+    test_2();
+    test_3();
     return 0;
 }
