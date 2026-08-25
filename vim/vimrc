@@ -66,17 +66,21 @@ autocmd User LspSetup call LspAddServer([#{
       \          '--query-driver=**/arm-none-eabi-gcc,**/tiarmclang'],
       \ }])
 
-" pyright for Python
+" pyright for Python. Use the nix-profile binary explicitly: a devshell may put
+" an older pyright first on PATH, and 1.1.399 emits no diagnostics to a client
+" that advertises workspaceFolders support (which this LSP client does).
 autocmd User LspSetup call LspAddServer([#{
       \   name: 'pyright',
       \   filetype: ['python'],
-      \   path: 'pyright-langserver',
+      \   path: expand('~/.nix-profile/bin/pyright-langserver'),
       \   args: ['--stdio'],
       \ }])
 
+" autoHighlightDiags must stay on: with it off the plugin drops diagnostics
+" entirely. Inline highlighting is suppressed via highlightDiagInline below.
 autocmd User LspSetup call LspOptionsSet(#{
       \   autoComplete: v:true,
-      \   autoHighlightDiags: v:false,
+      \   autoHighlightDiags: v:true,
       \   showDiagInPopup: v:true,
       \   showDiagInBalloon: v:false,
       \   showDiagWithSign: v:true,
