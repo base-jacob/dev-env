@@ -1,0 +1,11 @@
+# Recognize kernel-style assembly entry-point macros as function definitions,
+# so ctags tags e.g. ENTRY(_main) / WEAK(foo) rather than skipping them. These
+# macros (ENTRY, WEAK, GLOBAL, SYM_FUNC_START, SYM_CODE_START) are common to
+# Linux, U-Boot, and similar assembly sources. universal-ctags auto-loads every
+# ~/.ctags.d/*.ctags.
+--kinddef-Asm=f,func,functions defined via ENTRY()/WEAK()/SYM_FUNC_START() macros
+--regex-Asm=/^[ \t]*ENTRY\(([A-Za-z0-9_]+)\)/\1/f/
+--regex-Asm=/^[ \t]*WEAK\(([A-Za-z0-9_]+)\)/\1/f/
+--regex-Asm=/^[ \t]*GLOBAL\(([A-Za-z0-9_]+)\)/\1/f/
+--regex-Asm=/^[ \t]*SYM_FUNC_START(_LOCAL|_WEAK|_NOALIGN)?\(([A-Za-z0-9_]+)\)/\2/f/
+--regex-Asm=/^[ \t]*SYM_CODE_START(_LOCAL)?\(([A-Za-z0-9_]+)\)/\2/f/

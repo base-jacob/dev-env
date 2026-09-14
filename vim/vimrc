@@ -76,6 +76,16 @@ autocmd User LspSetup call LspAddServer([#{
       \   args: ['--stdio'],
       \ }])
 
+" asm-lsp for assembly (.s/.S) — clangd does not index asm, so gd/gr/K work in
+" .S files via this server instead. Label navigation is architecture-agnostic;
+" for instruction hover on ARM add a .asm-lsp.toml at the project root.
+autocmd User LspSetup call LspAddServer([#{
+      \   name: 'asm-lsp',
+      \   filetype: ['asm', 'gas'],
+      \   path: expand('~/.nix-profile/bin/asm-lsp'),
+      \   args: [],
+      \ }])
+
 " autoHighlightDiags must stay on: with it off the plugin drops diagnostics
 " entirely. Inline highlighting is suppressed via highlightDiagInline below.
 autocmd User LspSetup call LspOptionsSet(#{
@@ -98,6 +108,45 @@ nnoremap <silent> gr :LspShowReferences<CR>
 nnoremap <silent> gy :LspGotoTypeDef<CR>
 nnoremap <silent> gi :LspGotoImpl<CR>
 nnoremap <silent> K  :LspHover<CR>
+
+" ctags (universal-ctags): a whole-tree index of C *and* assembly labels, the
+" reliable way to jump across .S files (asm-lsp handles the current file; tags
+" span the project). Search up-tree for a tags file. Built-in <C-]> jumps to a
+" definition, g<C-]> lists choices; <leader>t fuzzy-searches all tags via fzf;
+" :MkTags (re)builds the index in the cwd.
+set tags=./tags;,tags
+nnoremap <silent> <leader>t :Tags<CR>
+
+" :MkTags builds the index in the cwd. If a compile_commands.json is present it
+" scopes tags to the translation units actually compiled (so a symbol like
+" board_init_f resolves to the few real definitions in *this* build instead of
+" every board's copy) while still indexing all headers (they aren't in the DB).
+" Otherwise it falls back to a full recursive index.
+command! MkTags call s:MkTags()
+function! s:MkTags() abort
+  if filereadable('compile_commands.json') && executable('jq')
+    call system("{ jq -r '.[].file' compile_commands.json; "
+          \ .. "find . \\( -name '*.h' -o -name '*.hpp' \\) -print; } "
+          \ .. "| sort -u | ctags -L - --fields=+n")
+    echom 'MkTags: scoped to compile_commands.json (+ headers)'
+  else
+    call system('ctags -R --languages=C,C++,Asm --fields=+n .')
+    echom 'MkTags: full tree'
+  endif
+endfunction
+
+" In assembly, make gd resolve cross-file: asm-lsp only sees the current file,
+" while most targets (and macro-defined entry points like ENTRY(_main)) live
+" elsewhere and are covered by the tags index. Prefer a tag match, else the LSP.
+function! s:AsmGotoDef() abort
+  let l:word = expand('<cword>')
+  if !empty(taglist('^' . l:word . '$'))
+    execute 'tjump ' . l:word
+  else
+    LspGotoDefinition
+  endif
+endfunction
+autocmd FileType asm,gas nnoremap <buffer> <silent> gd :call <SID>AsmGotoDef()<CR>
 
 " Diagnostics
 nnoremap <silent> [d :LspDiagPrev<CR>

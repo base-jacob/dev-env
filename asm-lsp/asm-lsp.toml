@@ -1,0 +1,10 @@
+# Global asm-lsp config. Its mere presence silences the per-workspace
+# "No .asm-lsp.toml config file found" warning. instruction_set only affects
+# instruction hover/diagnostics (label navigation is arch-agnostic) — set it to
+# whatever you work on most; override per-project with a .asm-lsp.toml at the
+# project root.
+version = "0.10"
+
+[default_config]
+assembler = "gas"
+instruction_set = "arm64"
