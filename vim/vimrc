@@ -20,6 +20,17 @@ let mapleader=" "
 " Use a colorscheme that doesn't fight with the terminal palette
 silent! colorscheme lunaperche
 
+" Vim's CMake syntax links argument keywords to ModeMsg, which lunaperche draws
+" in reverse video; relink them so they read as ordinary keywords.
+function! s:RelinkCMakeKeywords() abort
+  for l:group in getcompletion('cmakeKW', 'highlight')
+    if synIDattr(synIDtrans(hlID(l:group)), 'name') ==# 'ModeMsg'
+      execute 'highlight! link' l:group 'Keyword'
+    endif
+  endfor
+endfunction
+autocmd Syntax cmake call s:RelinkCMakeKeywords()
+
 " =============================================================================
 " Plugins (vim-plug)
 " =============================================================================
